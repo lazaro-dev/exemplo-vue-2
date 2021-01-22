@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Lançamentos</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/css/bootstrap.min.css" integrity="sha384-TX8t27EcRE3e/ihU7zmQxVncDAy5uIKz4rEkgIXeMed4M0jlfIDPvg6uqKI2xXr2" crossorigin="anonymous">
+        <link rel="stylesheet" href="css/styles.css">
+        <link rel="preconnect" href="https://fonts.gstatic.com">
+        <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+        
+    </head>
+    <body>
+        <main id="root">
+            <section class="control">
+                <div class="control__container">
+                    <div class="controll__balance">
+                        <h2 class="control__second">Saldo atual</h2>
+                        <h3 class="control__third">{{ total  | currencyReal()}}</h3>
+                    </div>                 
+                </div>
+            </section>
+
+            <section class="insert">
+                
+                <select name="tipo_lancamento" id="" class="insert__select" onchange="alterarCor()" v-model="lancamento.tipo_lancamento">                        
+                    <option value="1">Credito</option>
+                    <option value="2">Debito</option> 
+                </select>
+                
+                <input type="hidden" name="id" v-model="lancamento.id" >
+
+                <input type="date" class="insert__date" name="data" v-model="lancamento.data">
+
+                <input type="text" class="insert__text" pattern="(^[0-9]+?(.|,[0-9]+)$)" title="Somente Numeros" placeholder="adicionar valor" name="valor" v-model="lancamento.valor">
+
+                <input type="text" class="insert__text" placeholder="Descrição" name="descricao" v-model="lancamento.descricao">
+
+                <input type="submit" value="Salvar" class="insert__submit btn-success" @click="createLancamento()">
+                
+            </section>
+            <section class="finance">
+                <div class="finance__container margin-right--small">
+                    <h2 class="finance__second text-success">Credito</h2>
+                    
+                    <table class="table m-0">
+                        <tbody>                            
+                            <tr v-for="cred in creditos">
+                                <th scope="row">{{cred.data | formatDate}}</th>
+                                <td>{{cred.descricao}}</td>
+                                <td>{{cred.valor | currencyReal}}</td>
+                                <td>
+                                    <button class="finance__link btn-primary" @click="updateLancamento(cred.id)"></button>
+                                </td>
+                                <td>                                        
+                                    <input type="submit" value="X" class="finance__delete btn-danger" @click="deleteLancamento(cred.id)">                                        
+                                </td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="finance__container" >
+                    <h2 class="finance__second text-danger">Debito</h2>
+                    <div class="table-responsive">
+                        <table class="table m-0">
+                            <tbody>
+                                <tr v-for="deb in debitos">
+                                    <th scope="row">{{deb.data | formatDate}}</th>
+                                    <td>{{deb.descricao}}</td>
+                                    <td>{{deb.valor | currencyReal}}</td>
+                                    <td>
+                                        <button class="finance__link btn-primary" @click="updateLancamento(deb.id)"></button>
+                                    </td>
+                                    <td>                                        
+                                        <input type="submit" value="X" class="finance__delete btn-danger" @click="deleteLancamento(deb.id)">                                        
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                    </div>
+                </div>
+            </section>
+        </main>
+    </body>
+    <script>
+         var app = new Vue({
+            el: '#root',
+            data: {
+                total: 0,
+                lancamento: { id: 0, descricao: "", data: "", valor: "", tipo_lancamento: 1 },
+                creditos: [],
+                debitos: [],
+            },
+
+            methods: {
+                getLancamentos(){
+                    axios.get('./../server.php', { params: {op: 'read'}})
+                    .then(res => {
+                        if(res.data.status === 'ok'){
+                            this.creditos = res.data.credito;
+                            this.debitos = res.data.debito;
+                            this.totalLancamento();
+                        }else{
+                            console.log('Status: '+ res.data.status + ' Message: ' + res.data.message );
+                        }                        
+                    })
+                    .catch( err => {
+                        console.log(err);
+                    });
+                },
+                createLancamento(){
+                    let form = new FormData();
+                    
+                    for(let el in this.lancamento){
+                        form.append(el, this.lancamento[el]);
+                    }                    
+                    
+                    axios.post('./../server.php', form, { params: { op: (this.lancamento.id===0) ? 'create': 'update'}})                    
+                    .then(res => {
+                        if(res.data.status === 'ok'){
+                            
+                            this.lancamento = { id: 0, descricao: "", data: "", valor: "", tipo_lancamento: 1 };
+                            this.totalLancamento();                      
+                        }else{
+                            console.log('Status: '+ res.data.status + ' Message: ' + res.data.message );
+                        }             
+                       this.getLancamentos();
+                    })
+                    .catch( err => {
+                        console.log(err);
+                    });
+                },
+                updateLancamento(id){
+                    let a = this.creditos.filter(el => el.id === id);
+                    let b = this.debitos.filter(el => el.id === id);
+                    let aux = this.lancamento.tipo_lancamento;
+                    this.lancamento = (a.length > 0)? a[0] : b[0];
+                    if(aux != this.lancamento.tipo_lancamento) alterarCor();
+                },
+                deleteLancamento(id){                                                            
+                    axios.delete('./../server.php', { params: {op: 'delete', id: id}})
+                    .then(res => {                        
+                        if(res.data.status === 'ok'){
+                            this.totalLancamento();                           
+                        }else{
+                            console.log('Status: '+ res.data.status + ' Message: ' + res.data.message );
+                        }             
+                       this.getLancamentos();
+                    })
+                    .catch( err => {
+                        console.log(err);
+                    });
+                },
+                setTotal(el){
+                    this.total += el;
+                },
+                totalLancamento(){
+                    this.total = 0;
+                    this.creditos.map( el => this.setTotal( parseFloat(el.valor)));
+                    this.debitos.map( el => this.setTotal( parseFloat(-el.valor)));                    
+                }             
+            },
+            filters: {
+                currencyReal: function(value) {
+                    value = parseFloat(value);                    
+                    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                },
+                formatDate: function(value) {                    
+                    let el = value.replace(/-/g, '/').split("/");
+                    return el[2] + '/' + el[1] + '/' + el[0];
+                }
+            }
+        })
+        
+        app.getLancamentos();
+       
+    </script>   
+    <script src="script.js"></script>
+</html>
